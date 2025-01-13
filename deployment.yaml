@@ -1,0 +1,68 @@
+# создание Deployment и настройка контейнеров
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my_app
+  labels:
+      app: my_app
+
+spec:
+  replicas: 4 # достаточное количестов подов для пиковой нагрузки
+  selector:
+    matchLabels:
+      app: my_app
+  template:
+    metadata:
+      labels:
+        app: my_app
+    spec:
+      topologySpreadConstraints: # отвечает за распределение подов
+      - maxSkew: 1 # разница между зонами не больше 1 
+      # при 3 зонах и 4 подах это гарантирует по 1 поду на 2 зонах и 2 пода на 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: ScheduleAnyway # если по какой-то причине не получилось, то респределяем как можем
+        labelSelector:
+          matchLabels:
+            app: my_app
+      - maxSkew: 1 # разница между нодами не больше 1 - для отказоустойчивости
+      # в данной ситуации это значит, что на 1 ноде не больше 1 пода
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: my_app
+
+      initContainers: # контейнер, обрабатывающий первые запросы с большими ресурсами
+        - name: my_container_init
+          image: my_container_url
+        readinessProbe: # проверка подов для отказоустойчивости
+          exec:
+            command:
+              - check_command # какая-то проверка работоспособности
+            initialDelaySeconds: 10 # инициализация занимает 10 секунд
+            periodSeconds: 5
+            failureThreshold: 1 # для максимальной отказоустойчивости перезапуск после первой ошибки
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "1" # используется целое ядро CPU
+          # limits не указывается, пусть используются все доступные ресурсы
+        command: ['process_first_requests']
+
+      containers:
+        - name: my_container
+          image: my_container_url
+        readinessProbe: # проверка подов для отказоустойчивости
+          exec:
+            command:
+              - check_command # какая-то проверка работоспособности
+            initialDelaySeconds: 10 # инициализация занимает 10 секунд
+            periodSeconds: 5
+            failureThreshold: 1 # для максимальной отказоустойчивости перезапуск после первой ошибки
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m" # 0.1 CPU
+          limits: # немного больше, чем requests для эффективного потребления
+            memory: "256Mi"
+            cpu: "200m"
