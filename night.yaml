@@ -1,0 +1,36 @@
+# выключение лишних подов на ночь
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: scale_down
+spec:
+  schedule: "0 0 * * *"  # Запускается в полночь 
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: scale_down
+            image: bitnami/kubectl:latest
+            command: ["/bin/sh", "-c", "kubectl scale deployments my_app --replicas=1"]
+            # ночью запросов меньше на порядки, значит хватит 1
+          restartPolicy: OnFailure # должно успешно отработать 1 раз
+
+---
+# включение подов обратно утром
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: scale_up
+spec:
+  schedule: "0 8 * * *"  # Запускается в 8 часов утра
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: scale_up
+            image: bitnami/kubectl:latest
+            command: ["/bin/sh", "-c", "kubectl scale deployments my_app --replicas=4"]
+            # возвращаем 4
+          restartPolicy: OnFailure # должно успешно отработать 1 раз
